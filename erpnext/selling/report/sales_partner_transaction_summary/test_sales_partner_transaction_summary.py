@@ -15,6 +15,9 @@ from .sales_partner_transaction_summary import execute
 class TestSalesPartnerCommissionSummary(FrappeTestCase):
 	def setUp(self):
 		item = make_test_item("_Test Sales Partner Transaction Item")
+		item.brand = get_brand()
+		item.save()
+
 		customer = frappe.get_doc(get_customer_dict("__Test Sales Partner Transaction Customer")).insert(
 			ignore_permissions=True
 		)
@@ -42,7 +45,6 @@ class TestSalesPartnerCommissionSummary(FrappeTestCase):
 		so.append("sales_team", {"sales_person": self.sales_person, "allocated_percentage": 100})
 		so.insert(ignore_permissions=True)
 		so.submit()
-		print(so.name)
 		filters = {
 			"sales_partner": self.selling_partner,
 			"doctype": "Sales Order",
@@ -50,6 +52,8 @@ class TestSalesPartnerCommissionSummary(FrappeTestCase):
 			"to_date": add_days(today(), 2),
 			"customer": self.customer,
 			"company": so.company,
+			"item_group": "Products",
+			"brand": get_brand(),
 		}
 		data = execute(filters=filters)
 
@@ -66,3 +70,11 @@ class TestSalesPartnerCommissionSummary(FrappeTestCase):
 					self.assertEqual(row.get("sales_partner"), "__Test Sales Commission Partner 3")
 					self.assertEqual(row.get("commission_rate"), 5)
 					self.assertEqual(row.get("item_code"), "_Test Sales Partner Transaction Item")
+
+
+def get_brand():
+	brand = "_Test Brand"
+	if not frappe.db.exists("Brand", brand):
+		frappe.get_doc({"doctype": "Brand", "brand": brand}).insert(ignore_permissions=True)
+
+	return brand
