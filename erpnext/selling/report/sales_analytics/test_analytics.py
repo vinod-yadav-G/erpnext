@@ -14,12 +14,10 @@ from erpnext.selling.report.sales_analytics.sales_analytics import execute
 
 class TestAnalytics(FrappeTestCase):
 	def setUp(self):
-		item = make_test_item("__Test Analytics Item")
-		customer = frappe.get_doc(get_customer_dict("__Test Analytics Customer")).insert(
+		self.item = make_test_item("__Test Analytics Item")
+		self.customer = frappe.get_doc(get_customer_dict("__Test Analytics Customer")).insert(
 			ignore_permissions=True
 		)
-		self.item_code = item.item_code
-		self.customer = customer.name
 
 		self.filters = {
 			"tree_type": "Item Group",
@@ -44,8 +42,8 @@ class TestAnalytics(FrappeTestCase):
 
 	def test_report_sales_analytics(self):
 		so = make_sales_order(
-			customer=self.customer,
-			item_code=self.item_code,
+			customer=self.customer.name,
+			item_code=self.item.item_code,
 			transaction_date=add_days(today(), 2),
 			do_not_save=True,
 		)
@@ -63,11 +61,68 @@ class TestAnalytics(FrappeTestCase):
 				if row.get("entity") == "Order Types":
 					self.assertEqual(row.get("total"), 1000)
 
+		# based on quantity
+		self.filters.update({"value_quantity": "Quantity"})
+		report_1 = execute(self.filters)
+		if report_1[1]:
+			for row_1 in report_1[1]:
+				if row_1.get("entity") == "Order Types":
+					self.assertEqual(row_1.get("total"), 10)
+
+		# based on item_group
+		self.filters.update({"tree_type": "Customer Group"})
+		report_2 = execute(self.filters)
+		for row_2 in report_2[1]:
+			if row_2.get("entity") == self.customer.customer_group:
+				self.assertEqual(row_2.get("entity"), "_Test Customer Group")
+				self.assertEqual(row_2.get("total"), 10)
+
+		# based on item group
+		self.filters.update({"tree_type": "Item Group"})
+		report_3 = execute(self.filters)
+		if report_3[1]:
+			for row_3 in report_3[1]:
+				if row_3.get("entity") == self.item.item_group:
+					self.assertEqual(row_3.get("entity"), "Products")
+					self.assertEqual(row_3.get("total"), 10)
+
+		# based on territory
+		self.filters.update({"tree_type": "Territory"})
+		report_4 = execute(self.filters)
+		if report_4[1]:
+			self.assertEqual(report_4[1][0].get("entity"), "All Territories")
+			self.assertEqual(report_4[1][0].get("total"), 10)
+
+		# based on customer
+		self.filters.update({"tree_type": "Customer", "range": "Quarterly"})
+		report_5 = execute(self.filters)
+		if report_5[1]:
+			for row_5 in report_5[1]:
+				if row_5.get("entity") == self.customer.name:
+					self.assertEqual(row_5.get("entity"), "__Test Analytics Customer")
+					self.assertEqual(row_5.get("total"), 10)
+
+		self.filters.update({"range": "Weekly", "value_quantity": "Value"})
+		report_6 = execute(self.filters)
+		if report_6[1]:
+			for row_6 in report_6[1]:
+				if row_6.get("entity") == self.customer.name:
+					self.assertEqual(row_6.get("entity"), "__Test Analytics Customer")
+					self.assertEqual(row_6.get("total"), 1000)
+
+		self.filters.update({"range": "Yearly"})
+		report_7 = execute(self.filters)
+		if report_7[1]:
+			for row_7 in report_7[1]:
+				if row_7.get("entity") == self.customer.name:
+					self.assertEqual(row_7.get("entity"), "__Test Analytics Customer")
+					self.assertEqual(row_7.get("total"), 1000)
+
 	@if_app_installed("projects")
 	def test_sales_analytics_report_with_project(self):
 		so = make_sales_order(
-			customer=self.customer,
-			item_code=self.item_code,
+			customer=self.customer.name,
+			item_code=self.item.item_code,
 			transaction_date=add_days(today(), 2),
 			do_not_save=True,
 		)
@@ -82,6 +137,13 @@ class TestAnalytics(FrappeTestCase):
 				if row.get("entity") == get_project():
 					self.assertTrue(row.get("entity"), "Test Sales Analytics Project")
 					self.assertTrue(row.get("total"), 1000)
+
+		self.filters.update({"value_quantity": "Quantity"})
+		report_1 = execute(self.filters)
+		for row_1 in report_1[1]:
+			if row_1.get("entity") == get_project():
+				self.assertTrue(row_1.get("entity"), "Test Sales Analytics Project")
+				self.assertTrue(row_1.get("total"), 10)
 
 	def compare_result_for_customer(self):
 		filters = {
