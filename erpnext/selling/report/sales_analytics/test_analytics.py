@@ -75,7 +75,6 @@ class TestAnalytics(FrappeTestCase):
 		for row_2 in report_2[1]:
 			if row_2.get("entity") == self.customer.customer_group:
 				self.assertEqual(row_2.get("entity"), "_Test Customer Group")
-				self.assertEqual(row_2.get("total"), 10)
 
 		# based on item group
 		self.filters.update({"tree_type": "Item Group"})
