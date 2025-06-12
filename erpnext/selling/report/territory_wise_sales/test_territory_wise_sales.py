@@ -1,6 +1,6 @@
 import frappe
 from erpnext_crm.erpnext_crm.doctype.opportunity.opportunity import make_quotation
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import add_days, today
 
 from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
@@ -19,6 +19,7 @@ class TestTerritoryWiseSales(FrappeTestCase):
 	def tearDown(self):
 		frappe.db.rollback()
 
+	@change_settings("Global Defaults", {"default_currency": "INR"})
 	def test_territory_wise_sales_report(self):
 		from .territory_wise_sales import execute
 
