@@ -8,6 +8,8 @@ from frappe.utils import add_days, get_year_ending, get_year_start, today
 from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 from erpnext.selling.doctype.customer.test_customer import get_customer_dict
 
+from .subscription_plan import get_plan_rate
+
 
 class TestSubscriptionPlan(FrappeTestCase):
 	def setUp(self):
@@ -20,9 +22,7 @@ class TestSubscriptionPlan(FrappeTestCase):
 		frappe.db.rollback()
 
 	@change_settings("Subscription Settings", {"prorate": 0})
-	def test_plan_rate(self):
-		from .subscription_plan import get_plan_rate
-
+	def test_plan_rate_codecov(self):
 		sub_plan = self.get_subscription_plan()
 
 		fixed_rate = get_plan_rate(plan=sub_plan.name, prorate_factor=2)
@@ -45,6 +45,20 @@ class TestSubscriptionPlan(FrappeTestCase):
 			end_date=get_year_ending(today()),
 		)
 		self.assertEqual(based_monthly, 120)
+
+	@change_settings("Subscription Settings", {"prorate": 1})
+	def test_prorate_factor_codecov(self):
+		sub_plan = self.get_subscription_plan()
+		sub_plan.price_determination = "Monthly Rate"
+		sub_plan.cost = 20
+		sub_plan.save()
+
+		based_monthly = get_plan_rate(
+			plan=sub_plan.name,
+			start_date=get_year_start(today()),
+			end_date=get_year_ending(today()),
+		)
+		self.assertEqual(based_monthly, 240)
 
 	def get_subscription_plan(self):
 		subscription = "__Test Subscription Plan"
