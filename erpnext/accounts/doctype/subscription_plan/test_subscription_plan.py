@@ -23,7 +23,7 @@ class TestSubscriptionPlan(FrappeTestCase):
 
 	@change_settings("Subscription Settings", {"prorate": 0})
 	def test_plan_rate_codecov(self):
-		sub_plan = self.get_subscription_plan()
+		sub_plan = get_subscription_plan(self.item.item_code)
 
 		fixed_rate = get_plan_rate(plan=sub_plan.name, prorate_factor=2)
 		self.assertEqual(fixed_rate, 20)
@@ -48,7 +48,7 @@ class TestSubscriptionPlan(FrappeTestCase):
 
 	@change_settings("Subscription Settings", {"prorate": 1})
 	def test_prorate_factor_codecov(self):
-		sub_plan = self.get_subscription_plan()
+		sub_plan = get_subscription_plan(self.item.item_code)
 		sub_plan.price_determination = "Monthly Rate"
 		sub_plan.cost = 20
 		sub_plan.save()
@@ -60,23 +60,24 @@ class TestSubscriptionPlan(FrappeTestCase):
 		)
 		self.assertEqual(based_monthly, 240)
 
-	def get_subscription_plan(self):
-		subscription = "__Test Subscription Plan"
-		if not frappe.db.exists("Subscription Plan", subscription):
-			doc = frappe.get_doc(
-				{
-					"doctype": "Subscription Plan",
-					"plan_name": subscription,
-					"currency": "INR",
-					"item": self.item.item_code,
-					"price_determination": "Fixed Rate",
-					"cost": 10,
-					"billing_interval": "Day",
-					"billing_interval_count": 1,
-				}
-			)
-			doc.insert(ignore_permissions=True)
 
-			return doc
+def get_subscription_plan(item_code):
+	subscription = "__Test Subscription Plan"
+	if not frappe.db.exists("Subscription Plan", subscription):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Subscription Plan",
+				"plan_name": subscription,
+				"currency": "INR",
+				"item": item_code,
+				"price_determination": "Fixed Rate",
+				"cost": 10,
+				"billing_interval": "Day",
+				"billing_interval_count": 1,
+			}
+		)
+		doc.insert(ignore_permissions=True)
 
-		return frappe.get_doc("Subscription Plan", subscription)
+		return doc
+
+	return frappe.get_doc("Subscription Plan", subscription)
