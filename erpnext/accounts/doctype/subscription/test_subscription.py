@@ -663,6 +663,96 @@ class TestSubscription(FrappeTestCase):
 			process_all(subscription=subscription.name)
 			self.assertEqual(subscription.status, "Active")
 
+	def test_set_subscription_status_codecov(self):
+		from erpnext.accounts.doctype.subscription_plan.test_subscription_plan import get_subscription_plan
+
+		item = make_test_item("__Test Subscription Item")
+		customer = frappe.get_doc(get_customer_dict("__Test Subscription Customer_")).insert(
+			ignore_permissions=True
+		)
+		subscription_plan = get_subscription_plan(item.item_code)
+
+		args = {
+			"customer": customer.name,
+			"start_date": today(),
+			"plans": [{"plan": subscription_plan.name, "qty": 1}],
+		}
+
+		get_subscription = create_subscription(**args)
+		get_subscription.set("end_date", add_days(today(), 1))
+		self.assertEqual(get_subscription.status, "Active")
+
+		get_subscription.set_subscription_status(posting_date=add_days(today(), 2))
+		self.assertEqual(get_subscription.status, "Completed")
+
+	def test_validata_subscription_end_date(self):
+		from erpnext.accounts.doctype.subscription_plan.test_subscription_plan import get_subscription_plan
+
+		item = make_test_item("__Test Subscription Item")
+		customer = frappe.get_doc(get_customer_dict("__Test Subscription Customer_")).insert(
+			ignore_permissions=True
+		)
+		subscription_plan = get_subscription_plan(item.item_code)
+
+		args = {
+			"customer": customer.name,
+			"start_date": today(),
+			"plans": [{"plan": subscription_plan.name, "qty": 1}],
+		}
+
+		get_subscription = create_subscription(**args)
+		get_subscription.end_date = today()
+		with self.assertRaises(
+			frappe.ValidationError,
+			msg=f"Subscription End Date must be after {get_subscription.end_date} as per the subscription plan",
+		):
+			get_subscription.save()
+
+	def test_validate_trial_period_codecov(self):
+		from erpnext.accounts.doctype.subscription_plan.test_subscription_plan import get_subscription_plan
+
+		item = make_test_item("__Test Subscription Item")
+		customer = frappe.get_doc(get_customer_dict("__Test Subscription Customer_")).insert(
+			ignore_permissions=True
+		)
+		subscription_plan = get_subscription_plan(item.item_code)
+
+		args = {
+			"customer": customer.name,
+			"start_date": today(),
+			"plans": [{"plan": subscription_plan.name, "qty": 1}],
+		}
+
+		get_subscription = create_subscription(**args)
+		get_subscription.trial_period_start = today()
+		with self.assertRaises(
+			frappe.ValidationError, msg="Both Trial Period Start Date and Trial Period End Date must be set"
+		):
+			get_subscription.save()
+
+	def test_validate_trail_period_start_date(self):
+		from erpnext.accounts.doctype.subscription_plan.test_subscription_plan import get_subscription_plan
+
+		item = make_test_item("__Test Subscription Item")
+		customer = frappe.get_doc(get_customer_dict("__Test Subscription Customer_")).insert(
+			ignore_permissions=True
+		)
+		subscription_plan = get_subscription_plan(item.item_code)
+
+		args = {
+			"customer": customer.name,
+			"start_date": today(),
+			"plans": [{"plan": subscription_plan.name, "qty": 1}],
+		}
+
+		get_subscription = create_subscription(**args)
+		get_subscription.trial_period_start = add_days(today(), 1)
+		get_subscription.trial_period_end = add_days(today(), 2)
+		with self.assertRaises(
+			frappe.ValidationError, msg="Trial Period Start date cannot be after Subscription Start Date"
+		):
+			get_subscription.save()
+
 
 def make_plans():
 	create_plan(plan_name="_Test Plan Name", cost=900, currency="INR")
