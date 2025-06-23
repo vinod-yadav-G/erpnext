@@ -7288,6 +7288,44 @@ class TestSalesInvoice(FrappeTestCase):
 			customer.tax_withholding_category = ""
 			customer.save()
 
+	def test_set_indicators_codecov(self):
+		from .sales_invoice import make_sales_return
+
+		si = create_sales_invoice()
+		si.set_indicator()
+		self.assertEqual(si.docstatus, 1)
+		self.assertEqual(si.status, "Unpaid")
+
+		r_si = make_sales_return(si.name)
+		r_si.insert()
+		r_si.submit()
+		r_si.set_indicator()
+		self.assertEqual(r_si.docstatus, 1)
+		self.assertEqual(r_si.status, "Return")
+
+		si_1 = create_sales_invoice()
+		pe = get_payment_entry(si_1.doctype, si_1.name)
+		pe.insert(ignore_permissions=1)
+		pe.submit()
+
+		si_1.load_from_db()
+		si_1.set_indicator()
+
+		self.assertEqual(si_1.docstatus, 1)
+		self.assertEqual(si_1.status, "Paid")
+
+	def test_validate_serial_against_delivery_note_codecov(self):
+		from erpnext.stock.doctype.delivery_note.delivery_note import make_sales_invoice
+		from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
+
+		dn = create_delivery_note(do_not_save=True)
+		dn.insert(ignore_permissions=True)
+		dn.submit()
+
+		si = make_sales_invoice(dn.name)
+		si.insert(ignore_permissions=True)
+		si.validate_serial_against_delivery_note()
+
 
 def set_advance_flag(company, flag, default_account):
 	frappe.db.set_value(
