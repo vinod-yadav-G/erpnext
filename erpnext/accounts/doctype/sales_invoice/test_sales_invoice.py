@@ -7326,6 +7326,99 @@ class TestSalesInvoice(FrappeTestCase):
 		si.insert(ignore_permissions=True)
 		si.validate_serial_against_delivery_note()
 
+	def test_loyalty_programs_codecov(self):
+		from erpnext.selling.doctype.customer.test_customer import get_customer_dict
+
+		from .sales_invoice import get_loyalty_programs
+
+		customer = frappe.get_doc(get_customer_dict("__Test Loyalty Customer 1")).insert(
+			ignore_permissions=True
+		)
+		customer.loyalty_program = create_loyalty_program()
+		customer.save()
+
+		loyalty_program = get_loyalty_programs(customer.name)
+		self.assertEqual(loyalty_program[0], "__Test Single Loyalty 1")
+
+		l1_program = frappe.get_doc("Loyalty Program", create_loyalty_program())
+		l1_program.auto_opt_in = 1
+		l1_program.save()
+
+		customer_1 = frappe.get_doc(get_customer_dict("__Test Loyalty Customer 2")).insert(
+			ignore_permissions=True
+		)
+		loyalty_program_1 = get_loyalty_programs(customer_1.name)
+
+	def test_create_invoice_discounting_codecov(self):
+		from .sales_invoice import create_invoice_discounting
+
+		si = create_sales_invoice()
+
+		self.assertEqual(si.docstatus, 1)
+		self.assertEqual(si.status, "Unpaid")
+
+		accounts = create_discounting_accounts()
+
+		invoice_discounting = create_invoice_discounting(si.name)
+		invoice_discounting.loan_start_date = today()
+		invoice_discounting.loan_period = 100
+		invoice_discounting.short_term_loan = accounts.get("short_term_loan")
+		invoice_discounting.bank_account = accounts.get("bank_account")
+		invoice_discounting.bank_charges_account = accounts.get("bank_charges_account")
+		invoice_discounting.accounts_receivable_credit = accounts.get("ar_credit")
+		invoice_discounting.accounts_receivable_discounted = accounts.get("ar_discounted")
+		invoice_discounting.accounts_receivable_unpaid = accounts.get("ar_unpaid")
+		invoice_discounting.insert(ignore_permissions=True)
+		invoice_discounting.submit()
+
+		self.assertEqual(invoice_discounting.docstatus, 1)
+		self.assertEqual(invoice_discounting.status, "Sanctioned")
+
+	def test_get_warehouse_codecov(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.insert(ignore_permissions=True)
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.get_warehouse()
+		self.assertIn("POS Profile required to make POS Entry", str(cm.exception))
+
+	def test_validate_warehouse_codecov(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.update_stock = 1
+		si.items[0].warehouse = ""
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=True)
+		self.assertIn(f"Warehouse required for stock Item {si.items[0].item_code}", str(cm.exception))
+
+	@change_settings("Selling Settings", {"so_required": "Yes"})
+	def test_so_required_in_si_codecov(self):
+		si = create_sales_invoice(do_not_save=1)
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=True)
+		self.assertIn(f"Sales Order is mandatory for Item {si.items[0].item_code}", str(cm.exception))
+
+	def test_validate_item_cost_centers_codecov(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.items[0].cost_center = "Main - _TC1"
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert()
+		self.assertIn(
+			f"Row #{si.items[0].idx}: Cost Center {si.items[0].cost_center} does not belong to company {si.company}",
+			str(cm.exception),
+		)
+
+	def test_get_list_context_codecov(self):
+		from .sales_invoice import get_list_context
+
+		data = get_list_context()
+		self.assertTrue(data.get("title"), "Invoices")
+		self.assertTrue(data.get("no_breadcrumbs"), True)
+		self.assertTrue(data.get("show_sidebar"), True)
+		self.assertTrue(data.get("show_search"), True)
+
 
 def set_advance_flag(company, flag, default_account):
 	frappe.db.set_value(
@@ -8108,6 +8201,85 @@ def create_uom(uom):
 		new_uom.save()
 		return new_uom.uom_name
 
+
+def create_loyalty_program():
+	from erpnext.buying.doctype.purchase_order.test_purchase_order import create_company
+
+	create_company()
+	loyality_program = "__Test Single Loyalty 1"
+	# create a new loyalty Account
+	if not frappe.db.exists("Account", "Loyalty - _TC"):
+		frappe.get_doc(
+			{
+				"doctype": "Account",
+				"account_name": "Loyalty",
+				"parent_account": "Direct Expenses - _TC",
+				"company": "_Test Company",
+				"is_group": 0,
+				"account_type": "Expense Account",
+			}
+		).insert()
+
+	# create a new loyalty program Single tier
+	if not frappe.db.exists("Loyalty Program", loyality_program):
+		frappe.get_doc(
+			{
+				"doctype": "Loyalty Program",
+				"loyalty_program_name": "__Test Single Loyalty 1",
+				"auto_opt_in": 0,
+				"from_date": today(),
+				"to_date": today(),
+				"loyalty_program_type": "Single Tier Program",
+				"conversion_factor": 1,
+				"expiry_duration": 10,
+				"company": "_Test Company",
+				"cost_center": "Main - _TC",
+				"expense_account": "Loyalty - _TC",
+				"collection_rules": [{"tier_name": "Silver", "collection_factor": 1000, "min_spent": 1000}],
+			}
+		).insert()
+
+	return {loyality_program}
+
+
+def create_discounting_accounts():
+	ar_credit = create_account(
+		account_name="_Test Accounts Receivable Credit",
+		parent_account="Accounts Receivable - _TC",
+		company="_Test Company",
+	)
+	ar_discounted = create_account(
+		account_name="_Test Accounts Receivable Discounted",
+		parent_account="Accounts Receivable - _TC",
+		company="_Test Company",
+	)
+	ar_unpaid = create_account(
+		account_name="_Test Accounts Receivable Unpaid",
+		parent_account="Accounts Receivable - _TC",
+		company="_Test Company",
+	)
+	short_term_loan = create_account(
+		account_name="_Test Short Term Loan",
+		parent_account="Source of Funds (Liabilities) - _TC",
+		company="_Test Company",
+	)
+	bank_account = create_account(
+		account_name="_Test Bank 2", parent_account="Bank Accounts - _TC", company="_Test Company"
+	)
+	bank_charges_account = create_account(
+		account_name="_Test Bank Charges Account",
+		parent_account="Expenses - _TC",
+		company="_Test Company",
+	)
+
+	return {
+		"ar_credit": ar_credit,
+		"ar_discounted": ar_discounted,
+		"ar_unpaid": ar_unpaid,
+		"short_term_loan": short_term_loan,
+		"bank_account": bank_account,
+		"bank_charges_account": bank_charges_account,
+	}
 
 def create_fiscal_year(company):
 	from datetime import date, datetime
