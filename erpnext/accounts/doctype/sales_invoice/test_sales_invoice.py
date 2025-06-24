@@ -7419,6 +7419,85 @@ class TestSalesInvoice(FrappeTestCase):
 		self.assertTrue(data.get("show_sidebar"), True)
 		self.assertTrue(data.get("show_search"), True)
 
+	def test_set_pos_fields_codecov(self):
+		from erpnext.accounts.doctype.pos_profile.test_pos_profile import make_pos_profile
+
+		pos = make_pos_profile(do_not_insert=1)
+		pos.account_for_change_amount = "Cash - _TC"
+		pos.insert(ignore_permissions=True)
+		si = create_sales_invoice(do_not_save=1)
+		si.is_pos = 1
+		si.pos_profile = pos.name
+		si.set_pos_fields()
+		si.insert()
+		si.submit()
+		company_abbr = si.get_company_abbr()
+
+		self.assertEqual(si.docstatus, 1)
+		self.assertEqual(si.status, "Unpaid")
+		self.assertEqual(company_abbr, "_TC")
+
+	def test_validate_delivery_note_codecov(self):
+		from erpnext.stock.doctype.delivery_note.delivery_note import make_sales_invoice
+		from erpnext.stock.doctype.delivery_note.test_delivery_note import create_delivery_note
+
+		dn = create_delivery_note(do_not_save=1)
+		dn.insert(ignore_permissions=True)
+		dn.submit()
+
+		si = make_sales_invoice(dn.name)
+		si.update_stock = 1
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=1)
+
+		self.assertIn(f"Stock cannot be updated against Delivery Note {dn.name}", str(cm.exception))
+
+	def test_allow_write_off_only_on_pos_codecov(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.write_off_account = "Sales - _TC"
+		si.insert(ignore_permissions=True)
+
+		si.load_from_db()
+		self.assertIsNone(si.write_off_account)
+
+	def test_validate_write_off_account_codecov(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.write_off_amount = 100
+		si.write_off_account = ""
+		si.insert()
+		si.submit()
+
+	def test_validate_account_for_change_amount_codecov(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.change_amount = 100
+		si.account_for_change_amount = ""
+		si.insert()
+		si.submit()
+
+	def test_validate_dropship_item_codecov(self):
+		from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_invoice, make_sales_order
+
+		so = make_sales_order(do_not_save=True)
+		so.items[0].delivered_by_supplier = 1
+		so.items[0].supplier = "_Test Supplier"
+		so.insert()
+		so.submit()
+
+		si = make_sales_invoice(so.name)
+		si.update_stock = 1
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert()
+		self.assertIn("Could not update stock, invoice contains drop shipping item.", str(cm.exception))
+
+	def test_enable_discount_accounting_codecov(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.insert(ignore_permissions=True)
+		discounting = si.enable_discount_accounting
+		self.assertEqual(
+			discounting, frappe.db.get_single_value("Selling Settings", "enable_discount_accounting")
+		)
+
 
 def set_advance_flag(company, flag, default_account):
 	frappe.db.set_value(
@@ -8280,6 +8359,7 @@ def create_discounting_accounts():
 		"bank_account": bank_account,
 		"bank_charges_account": bank_charges_account,
 	}
+
 
 def create_fiscal_year(company):
 	from datetime import date, datetime
