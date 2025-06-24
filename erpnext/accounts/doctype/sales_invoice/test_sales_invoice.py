@@ -7525,6 +7525,120 @@ class TestSalesInvoice(FrappeTestCase):
 			str(cm.exception),
 		)
 
+	def test_on_recurring_codecov(self):
+		reference_si = create_sales_invoice(do_not_save=1)
+		reference_si.insert(ignore_permissions=True)
+		reference_si.submit()
+		self.assertEqual(reference_si.docstatus, 1)
+		self.assertEqual(reference_si.status, "Unpaid")
+
+		auto_repeat = frappe.get_doc(
+			{
+				"doctype": "Auto Repeat",
+				"reference_doctype": "Sales Invoice",
+				"reference_document": reference_si.name,
+				"frequency": "Monthly",
+				"next_schedule_date": add_days(today(), 30),
+			}
+		)
+		auto_repeat.insert(ignore_permissions=True)
+
+		new_si = create_sales_invoice(do_not_save=1)
+		new_si.insert(ignore_permissions=True)
+		new_si.submit()
+		new_si.on_recurring(reference_doc=reference_si, auto_repeat_doc=auto_repeat)
+
+		self.assertEqual(new_si.docstatus, 1)
+		self.assertIsNone(new_si.due_date)
+
+	def test_make_maintenance_schedule_from_si(self):
+		from .sales_invoice import make_maintenance_schedule
+
+		si = create_sales_invoice(do_not_save=1)
+		si.insert(ignore_permissions=True)
+		si.submit()
+
+		self.assertEqual(si.docstatus, 1)
+		self.assertEqual(si.status, "Unpaid")
+
+		ms = make_maintenance_schedule(si.name)
+		ms.transaction_date = today()
+		ms.items[0].start_date = today()
+		ms.items[0].end_date = add_days(today(), 1)
+		ms.items[0].no_of_visits = 2
+		ms.insert(ignore_permissions=True)
+		ms.submit()
+
+		self.assertEqual(ms.docstatus, 1)
+
+	def test_validate_pos_codecov(self):
+		from erpnext.accounts.doctype.pos_profile.test_pos_profile import make_pos_profile
+
+		pos = make_pos_profile(do_not_insert=1)
+		pos.account_for_change_amount = "Cash - _TC"
+		pos.insert(ignore_permissions=True)
+
+		si = create_sales_invoice(do_not_save=1)
+		si.is_pos = 1
+		si.pos_profile = pos.name
+		si.write_off_amount = 1000
+		si.is_return = 1
+		si.taxes_and_charges = ""
+		si.taxes = []
+		si.items[0].qty = -1
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=True)
+		self.assertIn("Paid amount + Write Off Amount can not be greater than Grand Total", str(cm.exception))
+
+	def test_get_all_mode_of_payments_codecov(self):
+		from .sales_invoice import get_all_mode_of_payments, get_mode_of_payment_info
+
+		si = create_sales_invoice()
+		mode_of_pmt = get_all_mode_of_payments(si)
+		if mode_of_pmt:
+			self.assertEqual(mode_of_pmt[0].get("default_account"), "Cash - _TC")
+
+		pmt_info = get_mode_of_payment_info("Cash", si.company)
+		if pmt_info:
+			self.assertEqual(pmt_info[0].get("default_account"), "Cash - _TC")
+
+	@change_settings("Accounts Settings", {"unlink_payment_on_cancellation_of_invoice": 1})
+	def test_check_if_return_invoice_linked_with_payment_entry_codecov(self):
+		from .sales_invoice import check_if_return_invoice_linked_with_payment_entry
+
+		si = create_sales_invoice(rate=1000, do_not_save=True)
+		si.insert(ignore_permissions=True)
+		si.submit()
+
+		return_si = create_sales_invoice(rate=200, do_not_save=True)
+		return_si.is_return = 1
+		# return_si.return_against = si.name
+		return_si.items[0].qty = -1
+		return_si.insert(ignore_permissions=True)
+		return_si.submit()
+
+		pe = get_payment_entry(si.doctype, si.name)
+		pe.append(
+			"references",
+			{
+				"reference_doctype": return_si.doctype,
+				"reference_name": return_si.name,
+				"allocated_amount": -200,
+			},
+		)
+		pe.insert(ignore_permissions=True)
+		pe.submit()
+
+		return_si.load_from_db()
+
+		with self.assertRaises(frappe.ValidationError) as cm:
+			return_si.cancel()
+		self.assertIn(
+			f"Please cancel and amend the Payment Entry {pe.name} to unallocate the amount of this Return Invoice before cancelling it.",
+			str(cm.exception),
+		)
+
 
 def set_advance_flag(company, flag, default_account):
 	frappe.db.set_value(
