@@ -7498,6 +7498,33 @@ class TestSalesInvoice(FrappeTestCase):
 			discounting, frappe.db.get_single_value("Selling Settings", "enable_discount_accounting")
 		)
 
+	def test_validate_receivable_to_acc_codecov(self):
+		si = create_sales_invoice(do_not_save=1)
+		si.debit_to = create_account(
+			account_name="__Test Re Account__",
+			parent_account="Accounts Receivable - _TC",
+			company="_Test Company",
+			account_type="Cash",
+			report_type="Balance Sheet",
+		)
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=True)
+		self.assertIn(
+			"Please ensure Debit To account __Test Re Account__ - _TC is a Receivable account. Change the account type to Receivable or select a different account.",
+			str(cm.exception),
+		)
+
+	def test_validate_debit_to_acc_codecov(self):
+		account = create_discounting_accounts()
+		si = create_sales_invoice(do_not_save=1)
+		si.debit_to = account.get("report_account")
+		with self.assertRaises(frappe.ValidationError) as cm:
+			si.insert(ignore_permissions=True)
+		self.assertIn(
+			"Please ensure Debit To account is a Balance Sheet account. You can change the parent account to a Balance Sheet account or select a different account.",
+			str(cm.exception),
+		)
+
 
 def set_advance_flag(company, flag, default_account):
 	frappe.db.set_value(
@@ -8350,6 +8377,13 @@ def create_discounting_accounts():
 		parent_account="Expenses - _TC",
 		company="_Test Company",
 	)
+	report_account = create_account(
+		account_name="_Test Report Account_",
+		parent_account="Expenses - _TC",
+		company="_Test Company",
+		report_type="Profit and Loss",
+		account_type="Cash",
+	)
 
 	return {
 		"ar_credit": ar_credit,
@@ -8358,6 +8392,7 @@ def create_discounting_accounts():
 		"short_term_loan": short_term_loan,
 		"bank_account": bank_account,
 		"bank_charges_account": bank_charges_account,
+		"report_account": report_account,
 	}
 
 
