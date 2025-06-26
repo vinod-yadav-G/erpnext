@@ -9,6 +9,7 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import add_days, add_months, today
 
+from erpnext.accounts.doctype.account.test_account import create_account
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 from erpnext.accounts.utils import get_fiscal_year
 from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_invoice
@@ -829,7 +830,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 			rate=10,
 			from_date=add_days(today(), 1),
 			to_date=today(),
-			account="TDS - _TC",
+			account=get_account(),
 			single_threshold=0,
 			cumulative_threshold=30000.00,
 		)
@@ -842,7 +843,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 			rate=10,
 			from_date=today(),
 			to_date=add_days(today(), 2),
-			account="TDS - _TC",
+			account=get_account(),
 			single_threshold=0,
 			cumulative_threshold=30000.00,
 		)
@@ -867,7 +868,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 			rate=10,
 			from_date=today(),
 			to_date=add_days(today(), 2),
-			account="TDS - _TC",
+			account=get_account(),
 			single_threshold=0,
 			cumulative_threshold=30000.00,
 		)
@@ -881,7 +882,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 			rate=10,
 			from_date=today(),
 			to_date=add_days(today(), 2),
-			account="TDS - _TC",
+			account=get_account(),
 			single_threshold=0,
 			cumulative_threshold=30000.00,
 		)
@@ -896,7 +897,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 			rate=10,
 			from_date=today(),
 			to_date=add_days(today(), 2),
-			account="TDS - _TC",
+			account=get_account(),
 			single_threshold=30000.00,
 			cumulative_threshold=20000.00,
 		)
@@ -915,7 +916,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 			rate=10,
 			from_date=today(),
 			to_date=add_days(today(), 1),
-			account="TDS - _TC",
+			account=get_account(),
 			single_threshold=0,
 			cumulative_threshold=30000.00,
 		)
@@ -932,7 +933,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 			rate=10,
 			from_date=today(),
 			to_date=add_days(today(), 1),
-			account="TDS - _TC",
+			account=get_account(),
 			single_threshold=0,
 			cumulative_threshold=30000.00,
 		)
@@ -953,7 +954,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 			rate=10,
 			from_date=today(),
 			to_date=add_days(today(), 1),
-			account="TDS - _TC",
+			account=get_account(),
 			single_threshold=0,
 			cumulative_threshold=30000.00,
 		)
@@ -1411,3 +1412,13 @@ def get_tax_withholding_category(
 		)
 		return doc
 	return category_name
+
+
+def get_account():
+	return create_account(
+		account_name="_Test Cash",
+		parent_account="Cash In Hand - _TC",
+		company="_Test Company",
+		account_currency="INR",
+		account_type="Cash",
+	)
