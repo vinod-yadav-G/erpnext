@@ -1164,7 +1164,7 @@ def create_records():
 				"item_group": "All Item Groups",
 				"is_stock_item": 0,
 			}
-		).insert()
+		).insert(ignore_mandatory=1)
 
 	if not frappe.db.exists("Item", "TCS Item"):
 		frappe.get_doc(
@@ -1175,7 +1175,7 @@ def create_records():
 				"item_group": "All Item Groups",
 				"is_stock_item": 1,
 			}
-		).insert()
+		).insert(ignore_mandatory=1)
 
 	# create tds account
 	if not frappe.db.exists("Account", "TDS - _TC"):
