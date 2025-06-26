@@ -1121,6 +1121,7 @@ def create_payment_entry(**args):
 	return pe
 
 
+@change_settings("GST Settings", {"validate_hsn_code": 0})
 def create_records():
 	# create a new suppliers
 	for name in [
