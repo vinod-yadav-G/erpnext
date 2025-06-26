@@ -875,7 +875,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 		category.append("accounts", {"company": "_Test Company", "account": "Cash - _TC"})
 		with self.assertRaises(frappe.ValidationError) as cm:
 			category.insert()
-		self.assertIn(f"Company {category.accounts[1].company} added multiple times", str(cm.exception))
+		self.assertIn("Company _Test Company added multiple times", str(cm.exception))
 
 		category_1 = get_tax_withholding_category(
 			category_name="__Test Cumulative Threshold TDS 1",
@@ -886,10 +886,10 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 			single_threshold=0,
 			cumulative_threshold=30000.00,
 		)
-		category_1.append("accounts", {"company": "_Test Company 1", "account": "TDS - _TC"})
+		category_1.append("accounts", {"company": "_Test Company 1", "account": get_account()})
 		with self.assertRaises(frappe.ValidationError) as cm:
 			category_1.insert()
-		self.assertIn(f"Account {category_1.accounts[1].account} added multiple times", str(cm.exception))
+		self.assertIn(f"Account {get_account()} added multiple times", str(cm.exception))
 
 	def test_validate_thresholds_codecov(self):
 		category = get_tax_withholding_category(
