@@ -4,13 +4,15 @@
 
 import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
+
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 from erpnext.controllers.sales_and_purchase_return import make_return_doc
 from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_order
 from erpnext.stock.doctype.item.test_item import make_item
-from erpnext.stock.get_item_details import get_item_details
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
+from erpnext.stock.get_item_details import get_item_details
 
 
 class TestPricingRule(FrappeTestCase):
@@ -20,15 +22,16 @@ class TestPricingRule(FrappeTestCase):
 		delete_existing_pricing_rules()
 		if "custom_crm" in frappe.get_installed_apps():
 			setup_pricing_rule_data()
-		
-		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_company
-		
+		from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
+
 		create_company()
 		get_or_create_fiscal_year("_Test Company")
 		get_or_create_customer(customer_name="_Test Customer")
 
 	def tearDown(self):
+		frappe.db.rollback()
 		delete_existing_pricing_rules()
 		if frappe.db.get_single_value("Selling Settings", "validate_selling_price"):
 			frappe.db.set_single_value("Selling Settings", "validate_selling_price", 0)
@@ -1596,17 +1599,17 @@ class TestPricingRule(FrappeTestCase):
 			free_item_rate=10,
 			condition="customer=='_Test Customer'",
 		)
-		so = make_sales_order(qty=5, warehouse="Stores - _TC",do_not_save=True)
+		so = make_sales_order(qty=5, warehouse="Stores - _TC", do_not_save=True)
 		so.set_warehouse = "Stores - _TC"
 		so.save()
 		so.submit()
 		self.assertEqual(len(so.items), 2)
 		self.assertEqual(so.items[1].rate, 10)
-	
+
 	def test_pr_to_so_with_applied_on_item_code_TC_S_143(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 		from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_order as make_so
-		
+
 		frappe.set_user("Administrator")
 		item = make_test_item("_Test Item")
 		item.save()
@@ -1620,25 +1623,32 @@ class TestPricingRule(FrappeTestCase):
 		sle2.save()
 		frappe.delete_doc_if_exists("Pricing Rule", "_Test Pricing Rule")
 
-		pricing_rule_doc = frappe.new_doc('Pricing Rule')
+		pricing_rule_doc = frappe.new_doc("Pricing Rule")
 		pricing_rule_data = {
-			"title": 'Free',
-			"apply_on": 'Item Code',
-			"price_or_product_discount": 'Product',
+			"title": "Free",
+			"apply_on": "Item Code",
+			"price_or_product_discount": "Product",
 			"selling": 1,
 			"min_qty": 0,
 			"max_qty": 5,
-			"company": '_Test Company',
-			"items":[ {"item_code": "_Test Item", "uom": '_Test UOM'}],
+			"company": "_Test Company",
+			"items": [{"item_code": "_Test Item", "uom": "_Test UOM"}],
 			"free_item": "_Test Item 1",
 			"free_qty": 1,
-			"free_item_rate" : 10,
+			"free_item_rate": 10,
 		}
-		
+
 		pricing_rule_doc.update(pricing_rule_data)
 		pricing_rule_doc.save()
 
-		so = make_so(item_code="_Test Item", qty=5, warehouse="_Test Warehouse - _TC", customer="_Test Customer", company = "_Test Company", do_not_save=True)
+		so = make_so(
+			item_code="_Test Item",
+			qty=5,
+			warehouse="_Test Warehouse - _TC",
+			customer="_Test Customer",
+			company="_Test Company",
+			do_not_save=True,
+		)
 		so.set_warehouse = "_Test Warehouse - _TC"
 		so.save()
 		so.submit()
@@ -1647,7 +1657,7 @@ class TestPricingRule(FrappeTestCase):
 
 	def test_pr_to_so_with_applied_on_item_group_TC_S_144(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
-		
+
 		frappe.set_user("Administrator")
 		create_item_group("_Test Item Group")
 
@@ -1662,37 +1672,36 @@ class TestPricingRule(FrappeTestCase):
 		make_stock_entry(item_code="_Test Item 1", qty=5, rate=500, target="Stores - _TC")
 		make_stock_entry(item_code="_Test Item", qty=5, rate=500, target="Stores - _TC")
 		frappe.delete_doc_if_exists("Pricing Rule", "_Test Pricing Rule")
-		pricing_rule = frappe.get_doc({
-			"doctype": "Pricing Rule",
-			"title": "_Test Pricing Rule",
-			"apply_on": "Item Group",
-			"selling": 1,
-			"warehouse": "Stores - _TC",
-			"price_or_product_discount": "Product",
-			"free_item": "_Test Item 1",
-			"free_qty": 1,
-			"free_item_rate": 10,
-			"condition": "customer=='_Test Customer'",
-			"company" : "_Test Company",
-			"item_groups": [{"item_group": "_Test Item Group"}]
-		})
-		pricing_rule.insert(ignore_permissions=True)
-		item_list = [{
-				"item_code": item.name,
+		pricing_rule = frappe.get_doc(
+			{
+				"doctype": "Pricing Rule",
+				"title": "_Test Pricing Rule",
+				"apply_on": "Item Group",
+				"selling": 1,
 				"warehouse": "Stores - _TC",
-				"qty": 1
-			},
-			]
+				"price_or_product_discount": "Product",
+				"free_item": "_Test Item 1",
+				"free_qty": 1,
+				"free_item_rate": 10,
+				"condition": "customer=='_Test Customer'",
+				"company": "_Test Company",
+				"item_groups": [{"item_group": "_Test Item Group"}],
+			}
+		)
+		pricing_rule.insert(ignore_permissions=True)
+		item_list = [
+			{"item_code": item.name, "warehouse": "Stores - _TC", "qty": 1},
+		]
 		so = make_sales_order(qty=5, warehouse="Stores - _TC", do_not_save=True, item_list=item_list)
 		so.set_warehouse = "Stores - _TC"
 		so.save()
 		so.submit()
 		self.assertEqual(len(so.items), 2)
 		self.assertEqual(so.items[1].rate, 10)
-	
+
 	def test_pr_to_so_with_applied_on_brand_TC_S_145(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
-		
+
 		frappe.set_user("Administrator")
 		create_brand("_Test Brand 1")
 		create_brand("_Test Brand")
@@ -1704,30 +1713,29 @@ class TestPricingRule(FrappeTestCase):
 		item1 = make_test_item("_Test Item 1")
 		item1.brand = "_Test Brand 1"
 		item1.save()
-		
+
 		make_stock_entry(item_code="_Test Item 1", qty=5, rate=500, target="Stores - _TC")
 		make_stock_entry(item_code="_Test Item", qty=5, rate=500, target="Stores - _TC")
-		pricing_rule = frappe.get_doc({
-			"doctype": "Pricing Rule",
-			"title": "_Test Pricing Rule",
-			"apply_on": "Brand",
-			"selling": 1,
-			"warehouse": "Stores - _TC",
-			"price_or_product_discount": "Product",
-			"free_item": "_Test Item 1",
-			"free_qty": 1,
-			"free_item_rate": 10,
-			"condition": "customer=='_Test Customer'",
-			"company" : "_Test Company",
-			"brands": [{"brand": "_Test Brand"}]
-		})
-		pricing_rule.insert(ignore_permissions=True)
-		item_list = [{
-				"item_code": item.name,
+		pricing_rule = frappe.get_doc(
+			{
+				"doctype": "Pricing Rule",
+				"title": "_Test Pricing Rule",
+				"apply_on": "Brand",
+				"selling": 1,
 				"warehouse": "Stores - _TC",
-				"qty": 1
-			},
-			]
+				"price_or_product_discount": "Product",
+				"free_item": "_Test Item 1",
+				"free_qty": 1,
+				"free_item_rate": 10,
+				"condition": "customer=='_Test Customer'",
+				"company": "_Test Company",
+				"brands": [{"brand": "_Test Brand"}],
+			}
+		)
+		pricing_rule.insert(ignore_permissions=True)
+		item_list = [
+			{"item_code": item.name, "warehouse": "Stores - _TC", "qty": 1},
+		]
 
 		so = make_sales_order(warehouse="Stores - _TC", do_not_save=True, item_list=item_list)
 		so.set_warehouse = "Stores - _TC"
@@ -1738,33 +1746,33 @@ class TestPricingRule(FrappeTestCase):
 
 	def test_cc_with_promotional_link_pr_TC_S_146(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
-		
+
 		make_test_item("_Test Item 1")
 		make_stock_entry(item_code="_Test Item 1", qty=5, rate=500, target="Stores - _TC")
 		make_stock_entry(item_code="_Test Item", qty=5, rate=500, target="Stores - _TC")
 		frappe.delete_doc_if_exists("Pricing Rule", "_Test Pricing Rule")
-		pr=make_pricing_rule(
+		pr = make_pricing_rule(
 			selling=1,
 			min_qty=0,
 			price_or_product_discount="Product",
-			apply_on= "Item Code",
-			warehouse = "Stores - _TC",
+			apply_on="Item Code",
+			warehouse="Stores - _TC",
 			items=[{"item_code": "_Test Item 1"}],
 			free_item="_Test Item 1",
 			free_qty=1,
 			free_item_rate=10,
 			condition="customer=='_Test Customer'",
-			company = "_Test Company"
+			company="_Test Company",
 		)
-		pr.coupon_code_based =1
+		pr.coupon_code_based = 1
 		pr.save()
 
 		frappe.delete_doc_if_exists("Coupon Code", "SAVE30")
-		
+
 		coupon_code = frappe.get_doc(
 			{
 				"doctype": "Coupon Code",
-				"coupon_type":"Promotional",
+				"coupon_type": "Promotional",
 				"coupon_name": "SAVE30",
 				"coupon_code": "SAVE30",
 				"pricing_rule": pr.name,
@@ -1775,37 +1783,37 @@ class TestPricingRule(FrappeTestCase):
 		coupon_code.insert()
 		self.assertEqual(coupon_code.coupon_type, "Promotional")
 		self.assertEqual(coupon_code.pricing_rule, pr.name)
-	
+
 	def test_cc_with_gift_card_link_pr_TC_S_147(self):
 		from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
-		
+
 		make_test_item("_Test Item 1")
 		make_stock_entry(item_code="_Test Item 1", qty=5, rate=500, target="Stores - _TC")
 		make_stock_entry(item_code="_Test Item", qty=5, rate=500, target="Stores - _TC")
 		frappe.delete_doc_if_exists("Pricing Rule", "_Test Pricing Rule")
-		pr=make_pricing_rule(
+		pr = make_pricing_rule(
 			selling=1,
 			min_qty=0,
 			price_or_product_discount="Product",
-			apply_on= "Item Code",
-			warehouse = "Stores - _TC",
+			apply_on="Item Code",
+			warehouse="Stores - _TC",
 			items=[{"item_code": "_Test Item 1"}],
 			free_item="_Test Item 1",
 			free_qty=1,
 			free_item_rate=10,
 			condition="customer=='_Test Customer'",
-			company = "_Test Company"
+			company="_Test Company",
 		)
-		pr.coupon_code_based =1
+		pr.coupon_code_based = 1
 		pr.save()
 
 		frappe.delete_doc_if_exists("Coupon Code", "SAVE30")
-		
+
 		coupon_code = frappe.get_doc(
 			{
 				"doctype": "Coupon Code",
-				"coupon_type":"Gift Card",
-				"customer":"_Test Customer",
+				"coupon_type": "Gift Card",
+				"customer": "_Test Customer",
 				"coupon_name": "SAVE30",
 				"coupon_code": "SAVE30",
 				"pricing_rule": pr.name,
@@ -1816,6 +1824,36 @@ class TestPricingRule(FrappeTestCase):
 		coupon_code.insert()
 		self.assertEqual(coupon_code.coupon_type, "Gift Card")
 		self.assertEqual(coupon_code.pricing_rule, pr.name)
+
+	def test_make_pricing_rule_codecov(self):
+		from erpnext.selling.doctype.customer.test_customer import get_customer_dict
+
+		from .pricing_rule import make_pricing_rule
+
+		customer = frappe.get_doc(get_customer_dict("__Test Pricing Rule Customer")).insert(
+			ignore_permissions=True
+		)
+		rule = make_pricing_rule(customer.doctype, customer.name)
+		self.assertEqual(rule.selling, 1)
+		self.assertEqual(rule.buying, 0)
+
+	def test_get_item_uoms_codecov(self):
+		from erpnext.accounts.doctype.pricing_rule.pricing_rule import get_item_uoms
+
+		item = make_test_item("__Test Pricing Rule Item 1")
+		item.append("uoms", {"uom": "Box", "conversion_factor": 1})
+		item.save()
+
+		# Correct: pass item_group as value
+		filters = {"value": item.item_group, "apply_on": "Item Group"}
+
+		result = get_item_uoms("Item", "Box", "uom", 0, 10, filters)
+		uoms = [r[0] for r in result]
+
+		self.assertIn("Box", uoms)
+		self.assertNotIn("Dozen", uoms)
+
+
 # test_dependencies = ["Campaign"]
 
 
@@ -1903,19 +1941,22 @@ def make_item_price(item, price_list_name, item_price):
 		}
 	).insert(ignore_permissions=True, ignore_mandatory=True)
 
+
 def create_brand(brand_name):
-	if not frappe.db.exists("Brand",brand_name):
+	if not frappe.db.exists("Brand", brand_name):
 		doc = frappe.new_doc("Brand")
 		doc.brand = brand_name
 		doc.insert(ignore_permissions=True)
 
+
 def create_item_group(group_name, is_group=False, parent_item_group="All Item Groups"):
-	if not frappe.db.exists("Item Group",group_name):
+	if not frappe.db.exists("Item Group", group_name):
 		doc = frappe.new_doc("Item Group")
 		doc.item_group_name = group_name
 		doc.is_group = is_group
-		doc.parent_item_group=parent_item_group
+		doc.parent_item_group = parent_item_group
 		doc.insert(ignore_permissions=True)
+
 
 def get_or_create_customer(**kwargs):
 	if not frappe.db.exists("Customer", kwargs.get("customer_name")):
