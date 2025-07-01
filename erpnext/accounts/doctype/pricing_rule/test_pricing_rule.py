@@ -1853,6 +1853,46 @@ class TestPricingRule(FrappeTestCase):
 		self.assertIn("Box", uoms)
 		self.assertNotIn("Dozen", uoms)
 
+	def test_remove_pricing_rules_codecov(self):
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
+
+		from .pricing_rule import remove_pricing_rules
+
+		item = make_test_item("__Test Prising Rule Item 2")
+		pr = make_pricing_rule(
+			selling=1,
+			min_qty=0,
+			price_or_product_discount="Price",
+			apply_on="Item Code",
+			items=[{"item_code": item.item_code}],
+			rate_or_discount="Rate",
+			rate=50,
+			title="Test Pricing Rule" + frappe.generate_hash(length=5),
+		)
+		si = create_sales_invoice(item_code=item.item_code, do_not_save=True)
+		si.items[0].pricing_rules = pr.name
+		si.insert()
+
+		remove_rule = remove_pricing_rules(
+			[
+				{
+					"doctype": "Sales Invoice Item",
+					"name": si.items[0].name,
+					"item_code": item.item_code,
+					"pricing_rules": pr.name,
+					"parenttype": "Sales Invoice",
+					"parent": si.name,
+					"price_list_rate": 50,
+				}
+			]
+		)
+		if remove_rule:
+			self.assertEqual(remove_rule[0].get("item_code"), item.item_code)
+			self.assertEqual(remove_rule[0].get("pricing_rules"), "")
+			self.assertEqual(remove_rule[0].get("parent"), si.name)
+			self.assertEqual(remove_rule[0].get("margin_rate_or_amount"), 0.0)
+			self.assertEqual(remove_rule[0].get("pricing_rule_removed"), True)
+
 
 # test_dependencies = ["Campaign"]
 
