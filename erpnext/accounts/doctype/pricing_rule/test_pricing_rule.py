@@ -1893,6 +1893,22 @@ class TestPricingRule(FrappeTestCase):
 			self.assertEqual(remove_rule[0].get("margin_rate_or_amount"), 0.0)
 			self.assertEqual(remove_rule[0].get("pricing_rule_removed"), True)
 
+	def test_validate_condition_codecov(self):
+		item = make_test_item("__Test Prising Rule Item 2")
+		with self.assertRaises(frappe.ValidationError) as cm:
+			make_pricing_rule(
+				selling=1,
+				min_qty=0,
+				price_or_product_discount="Price",
+				apply_on="Item Code",
+				items=[{"item_code": item.item_code}],
+				rate_or_discount="Rate",
+				rate=50,
+				condition="status = 'Draft'",
+				title="Test Pricing Rule" + frappe.generate_hash(length=5),
+			)
+		self.assertIn("Invalid condition expression", str(cm.exception))
+
 
 # test_dependencies = ["Campaign"]
 
