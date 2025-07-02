@@ -1909,6 +1909,74 @@ class TestPricingRule(FrappeTestCase):
 			)
 		self.assertIn("Invalid condition expression", str(cm.exception))
 
+	def test_apply_pricing_rule_codecov(self):
+		import json
+
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
+
+		from .pricing_rule import apply_pricing_rule
+
+		item = make_test_item("__Test Prising Rule Item 3")
+		pr = make_pricing_rule(
+			selling=1,
+			min_qty=0,
+			price_or_product_discount="Price",
+			apply_on="Item Code",
+			items=[{"item_code": item.item_code}],
+			rate_or_discount="Rate",
+			rate=50,
+			title="Test Pricing Rule" + frappe.generate_hash(length=5),
+		)
+		si = create_sales_invoice(item_code=item.item_code, do_not_save=True)
+		si.insert()
+
+		item_list = {
+			"items": [
+				{
+					"doctype": "Sales Invoice Item",
+					"name": si.items[0].name,
+					"child_docname": si.items[0].name,
+					"item_code": item.item_code,
+					"item_group": item.item_group,
+					"qty": si.items[0].qty,
+					"stock_qty": 1,
+					"uom": "Nos",
+					"stock_uom": "Nos",
+					"parenttype": "Sales Invoice",
+					"parent": si.name,
+					"pricing_rules": json.dumps([pr.name]),
+					"is_free_item": 0,
+					"price_list_rate": 50,
+					"conversion_factor": 1,
+					"margin_type": "",
+					"margin_rate_or_amount": 0,
+				}
+			],
+			"customer": si.customer,
+			"customer_group": "_Test Customer Group",
+			"territory": si.territory,
+			"currency": "INR",
+			"conversion_rate": 1,
+			"price_list": "Standard Selling",
+			"price_list_currency": "INR",
+			"plc_conversion_rate": 1,
+			"company": si.company,
+			"transaction_date": si.posting_date,
+			"sales_partner": si.sales_partner,
+			"ignore_pricing_rule": 0,
+			"doctype": "Sales Invoice",
+			"name": si.name,
+			"is_return": 0,
+			"update_stock": 0,
+			"is_internal_customer": 0,
+		}
+		rule = apply_pricing_rule(args=item_list)
+		if rule:
+			self.assertFalse(rule[0].get("has_margin"))
+			self.assertEqual(rule[0].get("free_item_data"), [])
+			self.assertEqual(rule[0].get("margin_rate_or_amount"), 0.0)
+			self.assertIsNone(rule[0].get("margin_type"))
+
 
 # test_dependencies = ["Campaign"]
 
