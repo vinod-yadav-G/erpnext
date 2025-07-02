@@ -1977,8 +1977,104 @@ class TestPricingRule(FrappeTestCase):
 			self.assertEqual(rule[0].get("margin_rate_or_amount"), 0.0)
 			self.assertIsNone(rule[0].get("margin_type"))
 
+	def test_validate_dates_codecov(self):
+		item = make_test_item("__Test Prising Rule Item 4")
+		pr = make_pricing_rule(
+			selling=1,
+			min_qty=0,
+			price_or_product_discount="Price",
+			apply_on="Item Code",
+			items=[{"item_code": item.item_code}],
+			rate_or_discount="Rate",
+			rate=50,
+			title="Test Pricing Rule" + frappe.generate_hash(length=5),
+		)
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pr.is_cumulative = 1
+			pr.save()
+		self.assertIn("Valid from and valid upto fields are mandatory for the cumulative", str(cm.exception))
 
-# test_dependencies = ["Campaign"]
+	def test_validate_mandatory_codecov(self):
+		pr = make_pricing_rule(selling=1, has_priority=1)
+		pr.priority = ""
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pr.save()
+		self.assertIn("Priority is mandatory", str(cm.exception))
+
+	def test_validate_apply_rule_on_other_codecov(self):
+		pr = make_pricing_rule(selling=1)
+		pr.apply_rule_on_other = "Item Code"
+		pr.other_item_code = ""
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pr.save()
+		self.assertIn(
+			"For the 'Apply Rule On Other' condition the field Item Code is mandatory", str(cm.exception)
+		)
+
+	def test_validate_price_or_product_discount_codecov(self):
+		pr = make_pricing_rule(selling=1)
+		pr.price_or_product_discount = "Price"
+		pr.rate_or_discount = ""
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pr.save()
+		self.assertIn("Rate or Discount is required for the price discount.", str(cm.exception))
+
+	def test_validate_apply_discount_on_rate_codecov(self):
+		pr = make_pricing_rule(selling=1)
+		pr.apply_discount_on_rate = 1
+		pr.has_priority = ""
+		pr.priority = ""
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pr.save()
+		self.assertIn(
+			"As the field Apply Discount on Discounted Rate is enabled, the field Priority is mandatory.",
+			str(cm.exception),
+		)
+
+		pr_1 = make_pricing_rule(selling=1)
+		pr_1.apply_discount_on_rate = 1
+		pr_1.has_priority = ""
+		pr_1.priority = 1
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pr_1.save()
+		self.assertIn(
+			"As the field Apply Discount on Discounted Rate is enabled, the value of the field Priority should be more than 1.",
+			str(cm.exception),
+		)
+
+	def test_validate_applicable_for_selling_or_buying_codecov(self):
+		with self.assertRaises(frappe.ValidationError) as cm:
+			make_pricing_rule()
+		self.assertIn("Atleast one of the Selling or Buying must be selected", str(cm.exception))
+
+		pr = make_pricing_rule(selling=1)
+		pr.max_qty = 10
+		pr.min_qty = 15
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pr.save()
+		self.assertIn("Min Qty can not be greater than Max Qty", str(cm.exception))
+
+		pr_1 = make_pricing_rule(selling=1)
+		pr_1.min_amt = 20
+		pr_1.max_amt = 15
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pr_1.save()
+		self.assertIn("Min Amt can not be greater than Max Amt", str(cm.exception))
+
+		pr_2 = make_pricing_rule(selling=1)
+		pr_2.rate_or_discount = "Rate"
+		pr_2.rate = -20
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pr_2.save()
+		self.assertIn("Rate can not be negative", str(cm.exception))
+
+		pr_3 = make_pricing_rule(selling=1)
+		pr_3.price_or_product_discount = "Product"
+		pr_3.free_item = ""
+		pr_3.mixed_conditions = 1
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pr_3.save()
+		self.assertIn("Free item code is not selected", str(cm.exception))
 
 
 def make_pricing_rule(**args):
@@ -2089,3 +2185,16 @@ def get_or_create_customer(**kwargs):
 		return doc.insert().name
 	else:
 		return kwargs.get("customer_name")
+
+
+def get_pricing_rule():
+	item = make_test_item("__Test Pricing Rule Items")
+	return frappe.get_doc(
+		{
+			"doctype": "Pricing Rule",
+			"title": "_Test" + frappe.generate_hash(length=5),
+			"apply_on": "Item Code",
+			"items": [{"item_code": item.item_code, "uom": "Nos"}],
+			"selling": 1,
+		}
+	)
