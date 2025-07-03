@@ -2,14 +2,15 @@
 # License: GNU General Public License v3. See license.txt
 
 
+from datetime import datetime
+
 import frappe
 from frappe import _, qb, throw
 from frappe.model.mapper import get_mapped_doc
 from frappe.query_builder.functions import Sum
 from frappe.utils import cint, cstr, flt, formatdate, get_link_to_form, getdate, nowdate
-from datetime import datetime
+
 import erpnext
-from erpnext.budget.doctype.work_breakdown_structure.work_breakdown_structure import check_available_budget
 from erpnext.accounts.deferred_revenue import validate_service_stop_date
 from erpnext.accounts.doctype.repost_accounting_ledger.repost_accounting_ledger import (
 	validate_docs_for_deferred_accounting,
@@ -34,6 +35,7 @@ from erpnext.accounts.general_ledger import (
 )
 from erpnext.accounts.party import get_due_date, get_party_account
 from erpnext.accounts.utils import get_account_currency, get_fiscal_year, update_voucher_outstanding
+from erpnext.budget.doctype.work_breakdown_structure.work_breakdown_structure import check_available_budget
 from erpnext.buying.utils import check_on_hold_or_closed_status
 from erpnext.controllers.accounts_controller import validate_account_head
 from erpnext.controllers.buying_controller import BuyingController
@@ -57,17 +59,24 @@ class PurchaseInvoice(BuyingController):
 
 	from typing import TYPE_CHECKING
 
-	if TYPE_CHECKING:
+	if TYPE_CHECKING:  # pragma: no cover
+		from frappe.types import DF
+
 		from erpnext.accounts.doctype.advance_tax.advance_tax import AdvanceTax
 		from erpnext.accounts.doctype.discount_terms.discount_terms import DiscountTerms
 		from erpnext.accounts.doctype.payment_schedule.payment_schedule import PaymentSchedule
 		from erpnext.accounts.doctype.pricing_rule_detail.pricing_rule_detail import PricingRuleDetail
-		from erpnext.accounts.doctype.purchase_invoice_advance.purchase_invoice_advance import PurchaseInvoiceAdvance
+		from erpnext.accounts.doctype.purchase_invoice_advance.purchase_invoice_advance import (
+			PurchaseInvoiceAdvance,
+		)
 		from erpnext.accounts.doctype.purchase_invoice_item.purchase_invoice_item import PurchaseInvoiceItem
-		from erpnext.accounts.doctype.purchase_taxes_and_charges.purchase_taxes_and_charges import PurchaseTaxesandCharges
+		from erpnext.accounts.doctype.purchase_taxes_and_charges.purchase_taxes_and_charges import (
+			PurchaseTaxesandCharges,
+		)
 		from erpnext.accounts.doctype.tax_withheld_vouchers.tax_withheld_vouchers import TaxWithheldVouchers
-		from erpnext.buying.doctype.purchase_receipt_item_supplied.purchase_receipt_item_supplied import PurchaseReceiptItemSupplied
-		from frappe.types import DF
+		from erpnext.buying.doctype.purchase_receipt_item_supplied.purchase_receipt_item_supplied import (
+			PurchaseReceiptItemSupplied,
+		)
 
 		additional_discount_percentage: DF.Float
 		address_display: DF.SmallText | None
@@ -168,7 +177,19 @@ class PurchaseInvoice(BuyingController):
 		shipping_address: DF.Link | None
 		shipping_address_display: DF.SmallText | None
 		shipping_rule: DF.Link | None
-		status: DF.Literal["", "Draft", "Return", "Debit Note Issued", "Submitted", "Paid", "Partly Paid", "Unpaid", "Overdue", "Cancelled", "Internal Transfer"]
+		status: DF.Literal[
+			"",
+			"Draft",
+			"Return",
+			"Debit Note Issued",
+			"Submitted",
+			"Paid",
+			"Partly Paid",
+			"Unpaid",
+			"Overdue",
+			"Cancelled",
+			"Internal Transfer",
+		]
 		subscription: DF.Link | None
 		supplied_items: DF.Table[PurchaseReceiptItemSupplied]
 		supplier: DF.Link
@@ -239,9 +260,9 @@ class PurchaseInvoice(BuyingController):
 		account_currency = account.account_currency
 
 		if supplier_currency != account_currency:
-			frappe.throw(f"Party Account <strong>{self.credit_to}</strong> currency ({account_currency}) and document currency ({supplier_currency}) should be the same")
-
-
+			frappe.throw(
+				f"Party Account <strong>{self.credit_to}</strong> currency ({account_currency}) and document currency ({supplier_currency}) should be the same"
+			)
 
 		if not self.on_hold:
 			self.release_date = ""
@@ -685,7 +706,7 @@ class PurchaseInvoice(BuyingController):
 		super().on_submit()
 
 		self.check_prev_docstatus()
-		update_actual_overall_budget(self,"Submit")
+		update_actual_overall_budget(self, "Submit")
 
 		if self.is_return and not self.update_billed_amount_in_purchase_order:
 			# NOTE status updating bypassed for is_return
@@ -726,9 +747,8 @@ class PurchaseInvoice(BuyingController):
 
 		self.process_common_party_accounting()
 
-		
 	def before_cancel(self):
-		update_actual_overall_budget(self,"Cancel")
+		update_actual_overall_budget(self, "Cancel")
 
 	def on_update_after_submit(self):
 		fields_to_check = [
@@ -933,7 +953,9 @@ class PurchaseInvoice(BuyingController):
 									"account": warehouse_account[item.warehouse]["account"],
 									"against": warehouse_account[item.from_warehouse]["account"],
 									"cost_center": item.cost_center,
-									"project": item.project or self.project if "projects" in frappe.get_installed_apps() else "",
+									"project": item.project or self.project
+									if "projects" in frappe.get_installed_apps()
+									else "",
 									"remarks": self.get("remarks") or _("Accounting Entry for Stock"),
 									"debit": warehouse_debit_amount,
 									"debit_in_transaction_currency": item.net_amount,
@@ -954,7 +976,9 @@ class PurchaseInvoice(BuyingController):
 									"account": warehouse_account[item.from_warehouse]["account"],
 									"against": warehouse_account[item.warehouse]["account"],
 									"cost_center": item.cost_center,
-									"project": item.project or self.project if "projects" in frappe.get_installed_apps() else "",
+									"project": item.project or self.project
+									if "projects" in frappe.get_installed_apps()
+									else "",
 									"remarks": self.get("remarks") or _("Accounting Entry for Stock"),
 									"debit": -1 * flt(credit_amount, item.precision("base_net_amount")),
 									"debit_in_transaction_currency": item.net_amount,
@@ -975,7 +999,9 @@ class PurchaseInvoice(BuyingController):
 										"debit_in_transaction_currency": item.net_amount,
 										"remarks": self.get("remarks") or _("Accounting Entry for Stock"),
 										"cost_center": item.cost_center,
-										"project": item.project if "projects" in frappe.get_installed_apps() else "",
+										"project": item.project
+										if "projects" in frappe.get_installed_apps()
+										else "",
 									},
 									account_currency,
 									item=item,
@@ -996,7 +1022,9 @@ class PurchaseInvoice(BuyingController):
 										),
 										"remarks": self.get("remarks") or _("Accounting Entry for Stock"),
 										"cost_center": item.cost_center,
-										"project": item.project or self.project if "projects" in frappe.get_installed_apps() else "",
+										"project": item.project or self.project
+										if "projects" in frappe.get_installed_apps()
+										else "",
 									},
 									account_currency,
 									item=item,
@@ -1019,7 +1047,9 @@ class PurchaseInvoice(BuyingController):
 											"credit": flt(base_amount["base_amount"]),
 											"credit_in_account_currency": flt(base_amount["amount"]),
 											"credit_in_transaction_currency": item.net_amount,
-											"project": item.project or self.project if "projects" in frappe.get_installed_apps() else "",
+											"project": item.project or self.project
+											if "projects" in frappe.get_installed_apps()
+											else "",
 										},
 										item=item,
 									)
@@ -1038,7 +1068,9 @@ class PurchaseInvoice(BuyingController):
 									"account": supplier_warehouse_account,
 									"against": item.expense_account,
 									"cost_center": item.cost_center,
-									"project": item.project or self.project if "projects" in frappe.get_installed_apps() else "",
+									"project": item.project or self.project
+									if "projects" in frappe.get_installed_apps()
+									else "",
 									"remarks": self.get("remarks") or _("Accounting Entry for Stock"),
 									"credit": flt(item.rm_supp_cost),
 									"credit_in_transaction_currency": item.net_amount,
@@ -1070,7 +1102,9 @@ class PurchaseInvoice(BuyingController):
 									"debit": base_amount,
 									"debit_in_transaction_currency": amount,
 									"cost_center": item.cost_center,
-									"project": self.get("project") if "projects" in frappe.get_installed_apps() else "",
+									"project": self.get("project")
+									if "projects" in frappe.get_installed_apps()
+									else "",
 								},
 								account_currency,
 								item=item,
@@ -1096,7 +1130,9 @@ class PurchaseInvoice(BuyingController):
 											"against": self.supplier,
 											"debit": discrepancy_caused_by_exchange_rate_difference,
 											"cost_center": item.cost_center,
-											"project": item.project or self.project if "projects" in frappe.get_installed_apps() else "",
+											"project": item.project or self.project
+											if "projects" in frappe.get_installed_apps()
+											else "",
 										},
 										account_currency,
 										item=item,
@@ -1109,7 +1145,9 @@ class PurchaseInvoice(BuyingController):
 											"against": self.supplier,
 											"credit": discrepancy_caused_by_exchange_rate_difference,
 											"cost_center": item.cost_center,
-											"project": item.project or self.project if "projects" in frappe.get_installed_apps() else "",
+											"project": item.project or self.project
+											if "projects" in frappe.get_installed_apps()
+											else "",
 										},
 										account_currency,
 										item=item,
@@ -1148,7 +1186,9 @@ class PurchaseInvoice(BuyingController):
 									),
 									"remarks": self.remarks or _("Accounting Entry for Stock"),
 									"cost_center": self.cost_center,
-									"project": item.project or self.project if "projects" in frappe.get_installed_apps() else "",
+									"project": item.project or self.project
+									if "projects" in frappe.get_installed_apps()
+									else "",
 								},
 								item=item,
 							)
@@ -1158,7 +1198,11 @@ class PurchaseInvoice(BuyingController):
 							item.item_tax_amount, item.precision("item_tax_amount")
 						)
 
-			if "assets" in frappe.get_installed_apps() and item.is_fixed_asset and item.landed_cost_voucher_amount:
+			if (
+				"assets" in frappe.get_installed_apps()
+				and item.is_fixed_asset
+				and item.landed_cost_voucher_amount
+			):
 				self.update_gross_purchase_amount_for_linked_assets(item)
 
 	def get_provisional_accounts(self):
@@ -1243,7 +1287,9 @@ class PurchaseInvoice(BuyingController):
 						"debit_in_transaction_currency": stock_adjustment_amt / self.conversion_rate,
 						"remarks": self.get("remarks") or _("Stock Adjustment"),
 						"cost_center": item.cost_center,
-						"project": item.project or self.get("project") if "projects" in frappe.get_installed_apps() else "",
+						"project": item.project or self.get("project")
+						if "projects" in frappe.get_installed_apps()
+						else "",
 					},
 					account_currency,
 					item=item,
@@ -1277,7 +1323,9 @@ class PurchaseInvoice(BuyingController):
 							"debit_in_transaction_currency": stock_adjustment_amt / self.conversion_rate,
 							"remarks": self.get("remarks") or _("Stock Adjustment"),
 							"cost_center": item.cost_center,
-							"project": item.project or self.get("project") if "projects" in frappe.get_installed_apps() else "",
+							"project": item.project or self.get("project")
+							if "projects" in frappe.get_installed_apps()
+							else "",
 						},
 						account_currency,
 						item=item,
@@ -1354,9 +1402,9 @@ class PurchaseInvoice(BuyingController):
 								"against": self.supplier,
 								"credit": applicable_amount,
 								"credit_in_transaction_currency": flt(
- 									applicable_amount / self.conversion_rate,
- 									frappe.get_precision("Purchase Invoice Item", "item_tax_amount"),
- 								),
+									applicable_amount / self.conversion_rate,
+									frappe.get_precision("Purchase Invoice Item", "item_tax_amount"),
+								),
 								"remarks": self.remarks or _("Accounting Entry for Stock"),
 							},
 							item=tax,
@@ -1376,9 +1424,9 @@ class PurchaseInvoice(BuyingController):
 								"against": self.supplier,
 								"credit": valuation_tax[tax.name],
 								"credit_in_transaction_currency": flt(
- 									valuation_tax[tax.name] / self.conversion_rate,
- 									frappe.get_precision("Purchase Invoice Item", "item_tax_amount"),
- 								),
+									valuation_tax[tax.name] / self.conversion_rate,
+									frappe.get_precision("Purchase Invoice Item", "item_tax_amount"),
+								),
 								"remarks": self.remarks or _("Accounting Entry for Stock"),
 							},
 							item=tax,
@@ -1424,7 +1472,6 @@ class PurchaseInvoice(BuyingController):
 				remarks=_("TDS Deducted"),
 				skip_merge=True,
 			)
-			
 
 	def make_payment_gl_entries(self, gl_entries):
 		# Make Cash GL Entries
@@ -1973,30 +2020,30 @@ def make_purchase_receipt(source_name, target_doc=None):
 			(flt(obj.qty) - flt(obj.received_qty)) * flt(obj.rate) * flt(source_parent.conversion_rate)
 		)
 
-	fields  = {
-			"Purchase Invoice": {
-				"doctype": "Purchase Receipt",
-				"validation": {
-					"docstatus": ["=", 1],
-				},
+	fields = {
+		"Purchase Invoice": {
+			"doctype": "Purchase Receipt",
+			"validation": {
+				"docstatus": ["=", 1],
 			},
-			"Purchase Invoice Item": {
-				"doctype": "Purchase Receipt Item",
-				"field_map": {
-					"name": "purchase_invoice_item",
-					"parent": "purchase_invoice",
-					"bom": "bom",
-					"purchase_order": "purchase_order",
-					"po_detail": "purchase_order_item",
-					"material_request": "material_request",
-					"material_request_item": "material_request_item",
-				},
-				"postprocess": update_item,
-				"condition": lambda doc: abs(doc.received_qty) < abs(doc.qty),
+		},
+		"Purchase Invoice Item": {
+			"doctype": "Purchase Receipt Item",
+			"field_map": {
+				"name": "purchase_invoice_item",
+				"parent": "purchase_invoice",
+				"bom": "bom",
+				"purchase_order": "purchase_order",
+				"po_detail": "purchase_order_item",
+				"material_request": "material_request",
+				"material_request_item": "material_request_item",
 			},
-			"Purchase Taxes and Charges": {"doctype": "Purchase Taxes and Charges"},
-		}
-	
+			"postprocess": update_item,
+			"condition": lambda doc: abs(doc.received_qty) < abs(doc.qty),
+		},
+		"Purchase Taxes and Charges": {"doctype": "Purchase Taxes and Charges"},
+	}
+
 	if "assets" in frappe.get_installed_apps():
 		fields["Purchase Invoice Item"]["field_map"].update({"wip_composite_asset": "wip_composite_asset"})
 
@@ -2009,7 +2056,8 @@ def make_purchase_receipt(source_name, target_doc=None):
 
 	return doc
 
-def update_actual_overall_budget(self,event):
+
+def update_actual_overall_budget(self, event):
 	wbs_dict = []
 	wbs_list = []
 	if self.items:
@@ -2019,58 +2067,77 @@ def update_actual_overall_budget(self,event):
 
 		if wbs_list:
 			for i in wbs_list:
-				wbs_dict.append({
-					"wbs_id":i,
-					"credit":0.0,
-					"debit_po":0.0,
-					"debit_pr":0.0,
-					"txn_date":"",
-					"project":"",
-					"voucher_name":"",
-					"voucher_type":""
-				})
-
+				wbs_dict.append(
+					{
+						"wbs_id": i,
+						"credit": 0.0,
+						"debit_po": 0.0,
+						"debit_pr": 0.0,
+						"txn_date": "",
+						"project": "",
+						"voucher_name": "",
+						"voucher_type": "",
+					}
+				)
 
 		for i in self.items:
 			pi_amt = i.get("net_amount")
 			if i.get("work_breakdown_structure") and not i.get("po_detail") and not i.get("pr_detail"):
 				for j in wbs_dict:
 					if i.get("work_breakdown_structure") == j.get("wbs_id"):
-						wbs_name,wbs_level = frappe.db.get_value("Work Breakdown Structure",i.get("work_breakdown_structure"),['wbs_name','wbs_level'])
-						j.update({
-							"credit":j.get("credit") + i.get("net_amount"),
-							"txn_date":self.posting_date,
-							"project":i.get("project") if "projects" in frappe.get_installed_apps() else "",
-							"voucher_type":self.doctype,
-							"voucher_name":self.name,
-							"wbs_name": wbs_name,
-							"wbs_level": wbs_level
-						})
-				wbs_curr_doc = frappe.get_doc("Work Breakdown Structure",i.get("work_breakdown_structure"))
+						wbs_name, wbs_level = frappe.db.get_value(
+							"Work Breakdown Structure",
+							i.get("work_breakdown_structure"),
+							["wbs_name", "wbs_level"],
+						)
+						j.update(
+							{
+								"credit": j.get("credit") + i.get("net_amount"),
+								"txn_date": self.posting_date,
+								"project": i.get("project")
+								if "projects" in frappe.get_installed_apps()
+								else "",
+								"voucher_type": self.doctype,
+								"voucher_name": self.name,
+								"wbs_name": wbs_name,
+								"wbs_level": wbs_level,
+							}
+						)
+				wbs_curr_doc = frappe.get_doc("Work Breakdown Structure", i.get("work_breakdown_structure"))
 				if event == "Submit":
 					wbs_curr_doc.actual_overall_budget = wbs_curr_doc.actual_overall_budget + pi_amt
-					wbs_curr_doc.assigned_overall_budget = wbs_curr_doc.actual_overall_budget + wbs_curr_doc.committed_overall_budget
-					wbs_curr_doc.available_budget = wbs_curr_doc.overall_budget - wbs_curr_doc.assigned_overall_budget
+					wbs_curr_doc.assigned_overall_budget = (
+						wbs_curr_doc.actual_overall_budget + wbs_curr_doc.committed_overall_budget
+					)
+					wbs_curr_doc.available_budget = (
+						wbs_curr_doc.overall_budget - wbs_curr_doc.assigned_overall_budget
+					)
 					if wbs_curr_doc.locked:
 						frappe.throw(
-							"Transaction Not Allowed for  WBS Element - {0} as this WBS is locked !".format(wbs_curr_doc.name)
+							"Transaction Not Allowed for  WBS Element - {0} as this WBS is locked !".format(
+								wbs_curr_doc.name
+							)
 						)
 				elif event == "Cancel":
 					wbs_curr_doc.actual_overall_budget = wbs_curr_doc.actual_overall_budget - pi_amt
-					wbs_curr_doc.assigned_overall_budget = wbs_curr_doc.actual_overall_budget + wbs_curr_doc.committed_overall_budget
-					wbs_curr_doc.available_budget = wbs_curr_doc.overall_budget - wbs_curr_doc.assigned_overall_budget
+					wbs_curr_doc.assigned_overall_budget = (
+						wbs_curr_doc.actual_overall_budget + wbs_curr_doc.committed_overall_budget
+					)
+					wbs_curr_doc.available_budget = (
+						wbs_curr_doc.overall_budget - wbs_curr_doc.assigned_overall_budget
+					)
 					if wbs_curr_doc.locked:
 						frappe.throw(
-							"Transaction Not Allowed for  WBS Element - {0} as this WBS is locked !".format(wbs_curr_doc.name)
+							"Transaction Not Allowed for  WBS Element - {0} as this WBS is locked !".format(
+								wbs_curr_doc.name
+							)
 						)
 				wbs_curr_doc.save(ignore_permissions=True)
 			elif i.get("work_breakdown_structure") and i.get("po_detail") and not i.get("pr_detail"):
 				poi = frappe.qb.DocType("Purchase Order Item")
 				query1 = (
 					frappe.qb.from_(poi)
-					.select(
-						poi.amount,poi.qty,poi.received_qty,poi.rate
-					)
+					.select(poi.amount, poi.qty, poi.received_qty, poi.rate)
 					.where(poi.name == i.get("po_detail"))
 				)
 
@@ -2079,47 +2146,64 @@ def update_actual_overall_budget(self,event):
 				if po_details:
 					if po_details[0].get("qty") == i.get("qty"):
 						pi_amt = i.get("net_amount")
-						debit_amt = i.get('qty') * po_details[0].get("rate")
+						debit_amt = i.get("qty") * po_details[0].get("rate")
 						for j in wbs_dict:
 							if i.get("work_breakdown_structure") == j.get("wbs_id"):
-								wbs_name,wbs_level = frappe.db.get_value("Work Breakdown Structure",i.get("work_breakdown_structure"),['wbs_name','wbs_level'])
-								j.update({
-									"credit":j.get("credit") + pi_amt,
-									"debit_po":j.get("debit_po") + debit_amt,
-									"txn_date":self.posting_date,
-									"project":i.get("project") if "projects" in frappe.get_installed_apps() else "",
-									"voucher_type":self.doctype,
-									"voucher_name":self.name,
-									"wbs_name": wbs_name,
-									"wbs_level": wbs_level
-								})
-						wbs = frappe.get_doc("Work Breakdown Structure",i.get("work_breakdown_structure"))
+								wbs_name, wbs_level = frappe.db.get_value(
+									"Work Breakdown Structure",
+									i.get("work_breakdown_structure"),
+									["wbs_name", "wbs_level"],
+								)
+								j.update(
+									{
+										"credit": j.get("credit") + pi_amt,
+										"debit_po": j.get("debit_po") + debit_amt,
+										"txn_date": self.posting_date,
+										"project": i.get("project")
+										if "projects" in frappe.get_installed_apps()
+										else "",
+										"voucher_type": self.doctype,
+										"voucher_name": self.name,
+										"wbs_name": wbs_name,
+										"wbs_level": wbs_level,
+									}
+								)
+						wbs = frappe.get_doc("Work Breakdown Structure", i.get("work_breakdown_structure"))
 						if event == "Submit":
 							wbs.committed_overall_budget = wbs.committed_overall_budget - debit_amt
 							wbs.actual_overall_budget = wbs.actual_overall_budget + pi_amt
 
-							wbs.assigned_overall_budget = wbs.actual_overall_budget + wbs.committed_overall_budget
+							wbs.assigned_overall_budget = (
+								wbs.actual_overall_budget + wbs.committed_overall_budget
+							)
 							wbs.available_budget = wbs.overall_budget - wbs.assigned_overall_budget
 							if wbs.locked:
 								frappe.throw(
-									"Transaction Not Allowed for  WBS Element - {0} as this WBS is locked !".format(wbs.name)
+									"Transaction Not Allowed for  WBS Element - {0} as this WBS is locked !".format(
+										wbs.name
+									)
 								)
 						elif event == "Cancel":
 							wbs.committed_overall_budget = wbs.committed_overall_budget + debit_amt
 							wbs.actual_overall_budget = wbs.actual_overall_budget - pi_amt
 
-							wbs.assigned_overall_budget = wbs.actual_overall_budget + wbs.committed_overall_budget
+							wbs.assigned_overall_budget = (
+								wbs.actual_overall_budget + wbs.committed_overall_budget
+							)
 							wbs.available_budget = wbs.overall_budget - wbs.assigned_overall_budget
 							if wbs.locked:
 								frappe.throw(
-									"Transaction Not Allowed for  WBS Element - {0} as this WBS is locked !".format(wbs.name)
+									"Transaction Not Allowed for  WBS Element - {0} as this WBS is locked !".format(
+										wbs.name
+									)
 								)
 						wbs.save(ignore_permissions=True)
 		if wbs_dict:
 			for i in wbs_dict:
-				create_budget_entry(i,event,self.company) 
+				create_budget_entry(i, event, self.company)
 
-def create_budget_entry(data,event,company):
+
+def create_budget_entry(data, event, company):
 	if data.get("credit") > 0.0 and data.get("wbs_id"):
 		bgt_ent = frappe.new_doc("Budget Entry")
 		if "projects" in frappe.get_installed_apps():
@@ -2134,24 +2218,25 @@ def create_budget_entry(data,event,company):
 		bgt_ent.wbs_name = data.get("wbs_name")
 		if event == "Submit":
 			bgt_ent.actual_overall_credit = data.get("credit")
-			
+
 			if data.get("debit_po") > 0.0:
 				bgt_ent.committed_overall_debit = data.get("debit_po")
 			if data.get("debit_pr") > 0.0:
 				bgt_ent.actual_overall_debit = data.get("debit_pr")
-			
+
 		elif event == "Cancel":
 			bgt_ent.actual_overall_debit = data.get("credit")
 			if data.get("debit_po") > 0.0:
 				bgt_ent.committed_overall_credit = data.get("debit_po")
-				
+
 			if data.get("debit_pr") > 0.0:
 				bgt_ent.actual_overall_credit = data.get("debit_pr")
-				
+
 		bgt_ent.voucher_type = data.get("voucher_type")
 		bgt_ent.voucher_no = data.get("voucher_name")
 		bgt_ent.save(ignore_permissions=True)
 		bgt_ent.submit()
+
 
 def get_wbs_amount(self, wbs):
 	wbs_amount = 0.0
@@ -2174,26 +2259,27 @@ def validate_available_budget(self):
 	if wbs_list:
 		if len(set(wbs_list)) == 1:
 			amt = get_wbs_amount(self, wbs_list[0])
-			ab = check_available_budget(wbs_list[0], amt, "Material Request",self.posting_date)
+			ab = check_available_budget(wbs_list[0], amt, "Material Request", self.posting_date)
 			abl = abs(ab.get("available_bgt"))
 			msg = _("Available Budget Limit Exceeded For This WBS - {0} by {1}".format(ab.get("wbs"), abl))
 			if ab.get("available_bgt") < 0.0:
 				abl = abs(ab.get("available_bgt"))
 				if ab.get("action") == "Stop":
-					frappe.throw(msg,title=_("Budget Exceeded"))
+					frappe.throw(msg, title=_("Budget Exceeded"))
 				else:
 					frappe.msgprint(msg, indicator="orange", title=_("Budget Exceeded"))
-					
+
 		elif len(set(wbs_list)) > 1:
 			for i in set(wbs_list):
 				amt = get_wbs_amount(self, i)
-				ab = check_available_budget(i, amt, "Material Request",self.posting_date)
+				ab = check_available_budget(i, amt, "Material Request", self.posting_date)
 				abl = abs(ab.get("available_bgt"))
-				msg = _("Available Budget Limit Exceeded For This WBS - {0} by {1}".format(ab.get("wbs"), abl))
+				msg = _(
+					"Available Budget Limit Exceeded For This WBS - {0} by {1}".format(ab.get("wbs"), abl)
+				)
 				if ab.get("available_bgt") < 0.0:
 					abl = abs(ab.get("available_bgt"))
 					if ab.get("action") == "Stop":
-						frappe.throw(msg,title=_("Budget Exceeded"))
+						frappe.throw(msg, title=_("Budget Exceeded"))
 					else:
 						frappe.msgprint(msg, indicator="orange", title=_("Budget Exceeded"))
-	
