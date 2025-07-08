@@ -5475,6 +5475,28 @@ class TestPurchaseInvoice(FrappeTestCase, StockTestMixin):
 
 		self.assertIn("this WBS is locked", str(cm.exception))
 
+	@change_settings("Buying Settings", {"po_required": "Yes"})
+	def test_po_required_in_pi_codecov(self):
+		args = {"qty": 1, "rate": 200, "do_not_save": True}
+		pi = make_purchase_invoice(**args)
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pi.insert(ignore_permissions=True)
+		self.assertIn(
+			"Purchase Order Required for item _Test ItemTo submit the invoice without purchase order please set Purchase Order Required as No in Buying Settings",
+			str(cm.exception),
+		)
+
+	@change_settings("Buying Settings", {"pr_required": "Yes"})
+	def test_pr_required_in_pi_codecov(self):
+		args = {"qty": 1, "rate": 200, "do_not_save": True}
+		pi = make_purchase_invoice(**args)
+		with self.assertRaises(frappe.ValidationError) as cm:
+			pi.insert(ignore_permissions=True)
+		self.assertIn(
+			"Purchase Receipt Required for item _Test ItemTo submit the invoice without purchase receipt please set Purchase Receipt Required as No in Buying Settings",
+			str(cm.exception),
+		)
+
 
 def set_advance_flag(company, flag, default_account):
 	frappe.db.set_value(
