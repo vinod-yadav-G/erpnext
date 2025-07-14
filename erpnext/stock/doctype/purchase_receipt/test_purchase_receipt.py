@@ -2,6 +2,7 @@
 # License: GNU General Public License v3. See license.txt
 
 from datetime import date, datetime
+from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
@@ -6182,7 +6183,8 @@ class TestPurchaseReceipt(FrappeTestCase):
 		po.reload()
 		po.cancel()
 
-	def test_get_already_received_qty_TC_SCK_455(self):
+	@patch("erpnext.stock.doctype.purchase_receipt.purchase_receipt.PurchaseReceipt.make_gl_entries")
+	def test_get_already_received_qty_TC_SCK_455(self, mock_make_gl_entries):
 		from erpnext.buying.doctype.purchase_order.test_purchase_order import create_purchase_order
 		from erpnext.regional.doctype.import_supplier_invoice.import_supplier_invoice import create_uom
 		from erpnext.stock.doctype.purchase_receipt.test_purchase_receipt import make_purchase_receipt
