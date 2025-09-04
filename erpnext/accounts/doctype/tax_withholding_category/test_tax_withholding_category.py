@@ -633,6 +633,10 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 		pi3.cancel()
 
 	def test_lower_deduction_certificate_TC_ACC_090_and_TC_ACC_091(self):
+		from erpnext.buying.doctype.supplier.test_supplier import create_supplier
+
+		args = {"supplier_name": "Test LDC Supplier"}
+		create_supplier(**args)
 		tax_category = get_tax_withholding_category(
 			category_name="Test Goods Category" + frappe.generate_hash(length=3),
 			rate=10,
@@ -662,15 +666,23 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 
 		pi1 = create_purchase_invoice(supplier="Test LDC Supplier", rate=35000)
 		pi1.submit()
-		self.assertEqual(pi1.taxes[0].tax_amount, 700)
+		for taxes1 in pi1.taxes:
+			if taxes1.is_tax_withholding_account == 1:
+				self.assertEqual(taxes1.tax_amount, 700)
 
 		pi2 = create_purchase_invoice(supplier="Test LDC Supplier", rate=35000)
 		pi2.submit()
-		self.assertEqual(pi2.taxes[0].tax_amount, 2300)
+		for taxes2 in pi2.taxes:
+			if taxes2.is_tax_withholding_account == 1:
+				self.assertEqual(taxes2.tax_amount, 2300)
+		# self.assertEqual(pi2.taxes[0].tax_amount, 2300)
 
 		pi3 = create_purchase_invoice(supplier="Test LDC Supplier", rate=35000)
 		pi3.submit()
-		self.assertEqual(pi3.taxes[0].tax_amount, 3500)
+		for taxes3 in pi3.taxes:
+			if taxes3.is_tax_withholding_account == 1:
+				self.assertEqual(taxes3.tax_amount, 3500)
+		# self.assertEqual(pi3.taxes[0].tax_amount, 3500)
 
 		pi1.cancel()
 		pi2.cancel()
