@@ -638,7 +638,7 @@ class TestTaxWithholdingCategory(FrappeTestCase):
 			rate=10,
 			from_date=today(),
 			to_date=add_days(today(), 30),
-			account="TDS - _TC",
+			account="Cash - _TC",
 			single_threshold=2000,
 			cumulative_threshold=2000,
 		)
@@ -1399,6 +1399,7 @@ def make_pan_no_field():
 	}
 
 	create_custom_fields(pan_field, update=1)
+
 
 def get_tax_withholding_category(
 	category_name,
