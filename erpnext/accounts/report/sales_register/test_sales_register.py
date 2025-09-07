@@ -1,11 +1,15 @@
-
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import getdate, today
+from frappe.utils import add_days, getdate, today
 
+from erpnext.accounts.doctype.payment_entry.test_payment_entry import make_test_item
 from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
 from erpnext.accounts.report.sales_register.sales_register import execute
 from erpnext.accounts.test.accounts_mixin import AccountsTestMixin
+from erpnext.selling.doctype.sales_order.test_sales_order import make_sales_invoice, make_sales_order
+from erpnext.stock.doctype.delivery_note.test_delivery_note import make_delivery_note
+
+from .sales_register import get_invoice_so_dn_map
 
 
 class TestItemWiseSalesRegister(AccountsTestMixin, FrappeTestCase):
@@ -178,3 +182,78 @@ class TestItemWiseSalesRegister(AccountsTestMixin, FrappeTestCase):
 		}
 		result_output = {k: v for k, v in filtered_output[0].items() if k in expected_result}
 		self.assertDictEqual(result_output, expected_result)
+
+	def test_without_data_codecov(self):
+		filters = frappe._dict(
+			{
+				"mode_of_payment": frappe.get_doc(
+					{
+						"doctype": "Mode of Payment",
+						"mode_of_payment": "Test Chq Account",
+						"enabled": 1,
+						"type": "Cash",
+					}
+				)
+				.insert(ignore_permissions=True)
+				.name
+			}
+		)
+		report_output = execute(filters)[1]
+		self.assertEqual(report_output, [])
+
+	def test_validate_customer_codecov(self):
+		filters = frappe._dict({"include_payments": 1})
+		with self.assertRaises(frappe.ValidationError) as e:
+			execute(filters)[1]
+		self.assertIn("Please select a customer for fetching payments.", str(e.exception))
+
+	def test_sales_invoice_with_mode_of_payment(self):
+		item = make_test_item("Test Sales Register Item")
+		si = create_sales_invoice(
+			item=item,
+			company=self.company,
+			customer=self.customer,
+			debit_to=self.debit_to,
+			posting_date=add_days(today(), 1),
+			parent_cost_center=self.cost_center,
+			cost_center=self.cost_center,
+			rate=1000,
+			price_list_rate=1000,
+			do_not_save=1,
+		)
+		si.due_date = add_days(today(), 1)
+		si.save()
+		si.submit()
+
+		filters = frappe._dict(
+			{"from_date": add_days(today(), 1), "to_date": add_days(today(), 1), "company": self.company}
+		)
+		report = execute(filters)
+		for data in report[1]:
+			self.assertEqual(data.get("voucher_type"), "Sales Invoice")
+			self.assertEqual(data.get("customer_name"), "_Test Customer")
+			self.assertEqual(data.get("net_total"), 1000)
+		filters["mode_of_payment"] = "Cash"
+		report = execute(filters)
+
+	def test_invoice_so_dn_map_with_so_and_dn_codecov(self):
+		# Create a Sales Order
+		so = make_sales_order(customer=self.customer, company=self.company)
+		so.submit()
+
+		# Create a Delivery Note against SO
+		dn = make_delivery_note(so.name)
+		dn.submit()
+
+		# Create a Sales Invoice directly against SO
+		si = make_sales_invoice(so.name)
+		si.items[0].delivery_note = dn.name  # link DN
+		si.submit()
+
+		# Call function under test
+		result = get_invoice_so_dn_map([si])
+
+		# Assert mappings
+		self.assertIn(si.name, result)
+		self.assertEqual(result[si.name]["sales_order"], [so.name])
+		self.assertEqual(result[si.name]["delivery_note"], [dn.name])
