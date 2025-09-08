@@ -6,9 +6,13 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_months, today
 
 from erpnext.accounts.report.purchase_register.purchase_register import execute
+from erpnext.buying.doctype.purchase_order.test_purchase_order import get_or_create_fiscal_year
 
 
 class TestPurchaseRegister(FrappeTestCase):
+	def setUp(self):
+		get_or_create_fiscal_year("_Test Company 6")
+
 	def test_purchase_register(self):
 		frappe.db.sql("delete from `tabPurchase Invoice` where company='_Test Company 6'")
 		frappe.db.sql("delete from `tabGL Entry` where company='_Test Company 6'")
@@ -140,6 +144,7 @@ class TestPurchaseRegister(FrappeTestCase):
 				"company": "_Test Company 6",
 				"represents_company": "_Test Company 6",
 				"is_internal_supplier": 1,
+				"currency": "INR",
 				"posting_date": today(),
 				"credit_to": "Creditors - _TC6",
 				"items": [
@@ -174,6 +179,7 @@ class TestPurchaseRegister(FrappeTestCase):
 				"company": "_Test Company",
 				"posting_date": today(),
 				"credit_to": "Creditors - _TC",
+				"currency": "INR",
 				"items": [
 					{
 						"item_code": "_Test Item",
